@@ -171,3 +171,8 @@ COPY --from=builder /app/model-runner /app/model-runner
 FROM sglang AS final-sglang
 # Copy the built binary from builder-sglang (without vLLM)
 COPY --from=builder-sglang /app/model-runner /app/model-runner
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:12434/ || exit 1
+
+  

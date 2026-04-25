@@ -76,5 +76,7 @@ jobs:
           docker pull ggranados1203/model-runner:latest
           docker run -d --name model-runner-test -p 8080:12434 ggranados1203/model-runner:latest
           sleep 10
-          curl -f http://localhost:8080
+          curl -o /dev/null -s -w "Response Time: %{time_total}s\n" http://localhost:8080
+          docker logs model-runner-test
+          docker stats --no-stream model-runner-test
           docker stop model-runner-test
