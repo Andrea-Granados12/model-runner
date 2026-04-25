@@ -1,0 +1,109 @@
+name: DockerHub Main Publish
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Resolve Docker Hub image name
+        id: image
+        shell: bash
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          if [ -n "$DOCKERHUB_IMAGE" ]; then
+            IMAGE_NAME="$DOCKERHUB_IMAGE"
+          elif [ -n "$DOCKERHUB_USERNAME" ]; then
+            IMAGE_NAME="$DOCKERHUB_USERNAME/model-runner"
+          else
+            echo "::error::Set vars.DOCKERHUB_IMAGE or secrets.DOCKERHUB_USERNAME before using this workflow."
+            exit 1
+          fi
+
+          echo "image=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "Publishing to $IMAGE_NAME"
+
+      - name: Load versions
+        id: versions
+        shell: bash
+        run: |
+          echo "llama_server_version=$(grep '^LLAMA_SERVER_VERSION=' .versions | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//')" >> "$GITHUB_OUTPUT"
+          echo "sglang_version=$(grep '^SGLANG_VERSION=' .versions | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//')" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+
+      - name: Generate CPU image metadata
+        id: meta_cpu
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.image }}
+          tags: |
+            type=raw,value=main
+            type=sha,prefix=sha-
+
+      - name: Build and push CPU image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
+        with:
+          context: .
+          file: Dockerfile
+          target: final-llamacpp
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            LLAMA_SERVER_VERSION=${{ steps.versions.outputs.llama_server_version }}
+            VERSION=${{ github.sha }}
+          push: true
+          tags: ${{ steps.meta_cpu.outputs.tags }}
+          labels: ${{ steps.meta_cpu.outputs.labels }}
+          cache-from: type=gha,scope=main-cpu
+          cache-to: type=gha,mode=max,scope=main-cpu
+
+      - name: Generate SGLang image metadata
+        id: meta_sglang
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.image }}
+          tags: |
+            type=raw,value=main-sglang-cuda
+            type=sha,prefix=sha-,suffix=-sglang-cuda
+
+      - name: Build and push SGLang image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
+        with:
+          context: .
+          file: Dockerfile
+          target: final-sglang
+          platforms: linux/amd64
+          build-args: |
+            LLAMA_SERVER_VERSION=${{ steps.versions.outputs.llama_server_version }}
+            LLAMA_SERVER_VARIANT=cuda
+            BASE_IMAGE=nvidia/cuda:12.9.0-runtime-ubuntu24.04
+            SGLANG_VERSION=${{ steps.versions.outputs.sglang_version }}
+            VERSION=${{ github.sha }}
+          push: true
+          tags: ${{ steps.meta_sglang.outputs.tags }}
+          labels: ${{ steps.meta_sglang.outputs.labels }}
+          cache-from: type=gha,scope=main-sglang
+          cache-to: type=gha,mode=max,scope=main-sglang
