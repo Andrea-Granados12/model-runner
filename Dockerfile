@@ -97,7 +97,7 @@ ARG TARGETARCH
 
 USER root
 
-RUN apt update && apt install -y python3.12 python3.12-venv python3.12-dev curl ca-certificates build-essential && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y python3 python3-venv python3-dev curl ca-certificates build-essential && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /opt/vllm-env && chown -R modelrunner:modelrunner /opt/vllm-env
 
@@ -105,14 +105,13 @@ USER modelrunner
 
 # Install uv and vLLM as modelrunner user
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && ~/.local/bin/uv venv --python 3.12 /opt/vllm-env \
-    && . /opt/vllm-env/bin/activate \
-    && ~/.local/bin/uv pip install vllm \
-         --extra-index-url https://wheels.vllm.ai/${VLLM_VERSION}/cu130 \
-         --extra-index-url https://download.pytorch.org/whl/cu130 \
-         --index-strategy unsafe-best-match
+    && ~/.local/bin/uv venv --python /usr/bin/python3 /opt/vllm-env \
+    && printf '%s' "${VLLM_VERSION}" | grep -qE '^(nightly|[0-9]+\.[0-9]+\.[0-9]+|[0-9a-f]{7,40})$' \
+            || { echo "Invalid VLLM_VERSION: must be a version (e.g. 0.16.0), 'nightly', or a hex commit hash"; exit 1; } \
+        && ~/.local/bin/uv pip install --python /opt/vllm-env/bin/python vllm \
+            --extra-index-url "https://wheels.vllm.ai/${VLLM_VERSION}/${VLLM_CUDA_VERSION}"
 
-RUN /opt/vllm-env/bin/python3.12 -c "import vllm; print(vllm.__version__)" > /opt/vllm-env/version
+RUN /opt/vllm-env/bin/python -c "import vllm; print(vllm.__version__)" > /opt/vllm-env/version
 
 # --- SGLang variant ---
 FROM llamacpp AS sglang
@@ -123,8 +122,9 @@ USER root
 
 # Install CUDA toolkit 13 for nvcc (needed for flashinfer JIT compilation)
 RUN apt update && apt install -y \
-    python3.12 python3.12-venv python3.12-dev \
+    python3 python3-venv python3-dev \
     curl ca-certificates build-essential \
+    pkg-config libssl-dev \
     libnuma1 libnuma-dev numactl ninja-build \
     wget gnupg \
     && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
@@ -135,6 +135,16 @@ RUN apt update && apt install -y \
 
 RUN mkdir -p /opt/sglang-env && chown -R modelrunner:modelrunner /opt/sglang-env
 
+# Install Rust system-wide (needed to compile outlines-core from source)
+# Set explicit CARGO_HOME/RUSTUP_HOME so the install path is predictable regardless of $HOME
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable --no-modify-path \
+    && ln -s /usr/local/cargo/bin/cargo /usr/local/bin/cargo \
+    && ln -s /usr/local/cargo/bin/rustc /usr/local/bin/rustc \
+    && chown -R modelrunner:modelrunner /usr/local/rustup /usr/local/cargo
+
 USER modelrunner
 
 # Set CUDA paths for nvcc (needed during flashinfer compilation)
@@ -142,12 +152,13 @@ ENV PATH=/usr/local/cuda-13.0/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:$LD_LIBRARY_PATH
 
 # Install uv and SGLang as modelrunner user
+# Use Python 3.13 explicitly: sglang's dependencies (nvidia-cutlass-dsl) have no wheels for Python 3.14+
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && ~/.local/bin/uv venv --python 3.12 /opt/sglang-env \
-    && . /opt/sglang-env/bin/activate \
-    && ~/.local/bin/uv pip install "sglang==${SGLANG_VERSION}"
+    && ~/.local/bin/uv python install 3.13 \
+    && ~/.local/bin/uv venv --python 3.13 /opt/sglang-env \
+    && ~/.local/bin/uv pip install --python /opt/sglang-env/bin/python "sglang==${SGLANG_VERSION}"
 
-RUN /opt/sglang-env/bin/python3.12 -c "import sglang; print(sglang.__version__)" > /opt/sglang-env/version
+RUN /opt/sglang-env/bin/python -c "import sglang; print(sglang.__version__)" > /opt/sglang-env/version
 
 FROM llamacpp AS final-llamacpp
 # Copy the built binary from builder
