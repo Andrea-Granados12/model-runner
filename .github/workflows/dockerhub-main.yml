@@ -69,3 +69,12 @@ jobs:
           labels: ${{ steps.meta_cpu.outputs.labels }}
           cache-from: type=gha,scope=main-cpu
           cache-to: type=gha,mode=max,scope=main-cpu
+
+      - name: Validate published image
+        shell: bash
+        run: |
+          docker pull ggranados1203/model-runner:latest
+          docker run -d --name model-runner-test -p 8080:12434 ggranados1203/model-runner:latest
+          sleep 10
+          curl -f http://localhost:8080
+          docker stop model-runner-test
