@@ -16,6 +16,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -23,19 +24,8 @@ jobs:
       - name: Resolve Docker Hub image name
         id: image
         shell: bash
-        env:
-          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          if [ -n "$DOCKERHUB_IMAGE" ]; then
-            IMAGE_NAME="$DOCKERHUB_IMAGE"
-          elif [ -n "$DOCKERHUB_USERNAME" ]; then
-            IMAGE_NAME="$DOCKERHUB_USERNAME/model-runner"
-          else
-            echo "::error::Set vars.DOCKERHUB_IMAGE or secrets.DOCKERHUB_USERNAME before using this workflow."
-            exit 1
-          fi
-
+          IMAGE_NAME="ggranados1203/model-runner"
           echo "image=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
           echo "Publishing to $IMAGE_NAME"
 
@@ -61,6 +51,7 @@ jobs:
         with:
           images: ${{ steps.image.outputs.image }}
           tags: |
+            type=raw,value=latest
             type=raw,value=main
             type=sha,prefix=sha-
 
