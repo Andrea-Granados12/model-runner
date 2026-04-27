@@ -103,4 +103,4 @@ jobs:
           docker logs model-runner-test
           docker stats --no-stream model-runner-test
           docker stop model-runner-test
->>>>>>> 1d492c05 (Prueba de error en workflow)
+>>>>>>> 1d492c05 (Prueba de error en workflow) .
