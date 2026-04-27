@@ -1,0 +1,11 @@
+{
+  "models": [
+    {
+      "name": "tiny",
+      "source": {
+        "type": "local",
+        "path": "/models/tiny.gguf"
+      }
+    }
+  ]
+}
