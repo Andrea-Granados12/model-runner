@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "models": [
     {
       "name": "tiny",
@@ -8,4 +9,7 @@
       }
     }
   ]
+=======
+  "models": []
+>>>>>>> 1d492c05 (Prueba de error en workflow)
 }

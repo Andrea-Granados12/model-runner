@@ -36,7 +36,11 @@ jobs:
           echo "llama_server_version=$(grep '^LLAMA_SERVER_VERSION=' .versions | cut -d= -f2- | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//')" >> "$GITHUB_OUTPUT"
 
       - name: Log in to Docker Hub
+<<<<<<< HEAD
         uses: docker/login-action@v3
+=======
+        uses: docker/login-action@v99
+>>>>>>> 1d492c05 (Prueba de error en workflow)
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -72,7 +76,10 @@ jobs:
 
       - name: Validate published image
         shell: bash
+        - name: Validate published image
+        shell: bash
         run: |
+<<<<<<< HEAD
           docker pull ggranados1203/model-runner:latest
 
           docker run -d --name model-runner-test -p 8080:12434 \
@@ -92,3 +99,12 @@ jobs:
         if: always()
         run: |
           docker rm -f model-runner-test || true
+=======
+         docker pull ggranados1203/model-runner:latest
+         docker run -d --name model-runner-test -p 8083:8080 ggranados1203/model-runner:latest
+          sleep 10
+          curl -o /dev/null -s -w "Response Time: %{time_total}s\n" http://localhost:8083
+          docker logs model-runner-test
+          docker stats --no-stream model-runner-test
+          docker stop model-runner-test
+>>>>>>> 1d492c05 (Prueba de error en workflow)
